@@ -79,10 +79,10 @@ def find_notes(V, sample_rate, M):
 
 
 # ========== Streamlit App ==========
-st.set_page_config(page_title="Guitar FFT Analyzer", layout="centered")
+st.set_page_config(page_title="Sound FFT Analyzer", layout="centered")
 
-st.title("🎸 Guitar FFT Analyzer")
-st.markdown("Upload a WAV file to analyze frequency peaks and musical notes.")
+st.title("🎸Sound FFT Analyzer")
+st.markdown("Upload a WAV file to analyze frequency peaks and notes.")
 
 uploaded_file = st.file_uploader("Choose a .wav file", type=["wav"])
 
