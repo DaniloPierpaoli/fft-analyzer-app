@@ -6,83 +6,86 @@ from scipy.fft import fft, fftshift
 import pandas as pd
 
 # ========== Your FFT Peak Detector ==========
-def find_freqs(V, sample_rate, M):
+def find_freqs(V, samplerate, M):
+    """
+    Returns the M frequencies corresponding to the largest peaks of the ESD.
+    Inputs:
+        V: discrete signal
+        samplerate: Hz
+        M: number of frequencies to find
+    Output:
+        freq_peaks: array of M frequencies
+        esd_peaks: array of corresponding ESD values
+    """
     N = len(V)
-    tN = N / sample_rate
-    n = np.arange(-N/2, N/2, 1)
-    f = n / tN
-    V_fft = fft(V, norm='forward')
-    S_n = np.real(V_fft * np.conjugate(V_fft))
-    half_freq = int(len(f) / 2)
-    positive_f = f[half_freq:]
-    positive_Sn = fftshift(S_n)[half_freq:]
 
-    peaks = np.empty((0, 2))
-    old_Sn = 0
-    index = 0
-    while index < len(positive_Sn):
-        Sn = positive_Sn[index]
-        if Sn > old_Sn:
-            if (Sn > positive_Sn[index + 1] and
-                Sn > positive_Sn[index + 3] and
-                Sn > positive_Sn[index + 7] and
-                Sn > positive_Sn[index + 11] and
-                Sn > positive_Sn[index + 15]):
-                peaks = np.concatenate([peaks, [[Sn, positive_f[index]]]], axis=0)
-                old_Sn = 0
-                index += 20
-                if index > len(positive_Sn) - 23:
-                    break
-            else:
-                index += 1
-        else:
-            old_Sn = Sn
-            index += 1
+    # calculate the Fourier transform of V
+    V_fft = fft(V, norm ='forward')
+    
+    #Calculate energy spectral density. Analytically we don't need to use the np.real function, but there are computational errors in handling variables
+    esd = np.abs(V_fft[:N//2])**2
+    
+    # Returns array of frequencies of the FFT 
+    freqs = fftfreq(N, 1/samplerate)[:N//2]
 
-    df_peaks = pd.DataFrame(peaks, columns=["Sn", "Frequency (Hz)"])
-    sorted_df = df_peaks.sort_values(by="Sn", ascending=False)
-    return sorted_df["Frequency (Hz)"].head(M)
+    data = pd.DataFrame({
+        'frequency': freqs,
+        'esd': esd
+    })
+
+    # Returns top M peaks
+    top_peaks = data.sort_values(by='esd', ascending=False).head(M).sort_values(by='frequency')
+
+    return top_peaks['frequency'].values, top_peaks['esd'].values
 
 
 # ========== Your Note Detector ==========
-def find_notes(V, sample_rate, M):
-    def note_finder(frequency):
-        notes = {
-            16.35: 'C', 17.32: 'C#', 18.35: 'D', 19.45: 'D#', 20.60: 'E',
-            21.83: 'F', 23.12: 'F#', 24.50: 'G', 25.96: 'G#', 27.50: 'A',
-            29.14: 'A#', 30.87: 'B'
-        }
-        octaves = [0, 1, 2, 3, 4, 5, 6, 7]
-        old_note = 16.35
-        old_octave = 0
-        old_label = 'C'
+def find_notes(V, samplerate, M):
+    """
+    Returns the M musical notes closest to the M largest ESD peaks.
+    Inputs:
+        V: discrete signal
+        samplerate: Hz
+        M: number of peaks to find
+    Outputs:
+        notes: list of note names
+        octaves: list of octave numbers
+        frequencies: list of corresponding frequencies
+    """
+    note_base_freqs = {
+        'C': 261.6, 'C#': 277.2, 'D': 293.7, 'D#': 311.1, 'E': 329.6,
+        'F': 349.2, 'F#': 370.0, 'G': 392.0, 'G#': 415.3, 'A': 440.0,
+        'A#': 466.2, 'B': 493.9
+    }
 
-        for octave in octaves:
-            for base_freq, label in notes.items():
-                freq_val = base_freq * 2**octave
-                if frequency < freq_val:
-                    if abs(freq_val - frequency) < abs(old_note - frequency):
-                        return label, octave
-                    else:
-                        return old_label, old_octave
-                else:
-                    old_note = freq_val
-                    old_octave = octave
-                    old_label = label
+    note_names = []
+    octaves = []
+    peak_freqs, _ = find_freqs(V, samplerate, M)
 
-    frequencies = find_freqs(V, sample_rate=sample_rate, M=M)
-    notes_array = np.empty((0, 3))
-    for freq in frequencies:
-        note, octave = note_finder(freq)
-        notes_array = np.concatenate([notes_array, [[note, octave, freq]]], axis=0)
-    return pd.DataFrame(notes_array, columns=["Note", "Octave", "Frequency (Hz)"])
+    for f in peak_freqs:
+        closest_note = None
+        closest_octave = None
+        min_diff = float('inf')
+
+        for octave in range(0, 8):
+            for note, base in note_base_freqs.items():
+                freq = base * (2 ** (octave - 4))
+                if abs(f - freq) < min_diff:
+                    min_diff = abs(f - freq)
+                    closest_note = note
+                    closest_octave = octave
+
+        note_names.append(closest_note)
+        octaves.append(closest_octave)
+
+    return note_names, octaves, peak_freqs
 
 
 # ========== Streamlit App ==========
-st.set_page_config(page_title="Sound FFT Analyzer", layout="centered")
+st.set_page_config(page_title="Guitar FFT Analyzer", layout="centered")
 
-st.title("🎸Sound FFT Analyzer")
-st.markdown("Upload a WAV file to analyze frequency peaks and notes.")
+st.title("🎸 Guitar FFT Analyzer")
+st.markdown("Upload a WAV file to analyze frequency peaks and musical notes.")
 
 uploaded_file = st.file_uploader("Choose a .wav file", type=["wav"])
 
@@ -133,3 +136,4 @@ if uploaded_file:
     ax.set_title("FFT Spectrum with Peaks")
     ax.grid(True)
     st.pyplot(fig)
+
