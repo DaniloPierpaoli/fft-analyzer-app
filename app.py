@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io import wavfile
-from scipy.fft import fft, fftshift
+from scipy.fft import fft, fftfreq
 import pandas as pd
 
 # ========== Your FFT Peak Detector ==========
@@ -20,13 +20,13 @@ def find_freqs(V, samplerate, M):
     N = len(V)
 
     # calculate the Fourier transform of V
-    V_fft = fft(V, norm ='forward')
-    
-    #Calculate energy spectral density. Analytically we don't need to use the np.real function, but there are computational errors in handling variables
-    esd = np.abs(V_fft[:N//2])**2
-    
+    V_fft = fft(V, norm='forward')
+
+    # Calculate energy spectral density
+    esd = np.abs(V_fft[:N // 2])**2
+
     # Returns array of frequencies of the FFT 
-    freqs = fftfreq(N, 1/samplerate)[:N//2]
+    freqs = fftfreq(N, 1 / samplerate)[:N // 2]
 
     data = pd.DataFrame({
         'frequency': freqs,
@@ -106,23 +106,28 @@ if uploaded_file:
 
     # ===== Notes Table =====
     st.subheader(f"Detected Notes (Top {M})")
-    detected_notes = find_notes(data, sample_rate=rate, M=M)
-    st.dataframe(detected_notes)
+    note_names, octaves, freqs = find_notes(data, samplerate=rate, M=M)
+    df_notes = pd.DataFrame({
+        "Note": note_names,
+        "Octave": octaves,
+        "Frequency (Hz)": [f"{f:.2f}" for f in freqs]
+    })
+    st.dataframe(df_notes)
 
     # ===== Full FFT Plot with Peak Markers =====
     st.subheader("Frequency Spectrum")
 
     fft_data = np.abs(np.fft.fft(data))
-    freqs = np.fft.fftfreq(len(fft_data), d=1 / rate)
-    half_N = len(freqs) // 2
+    freqs_full = np.fft.fftfreq(len(fft_data), d=1 / rate)
+    half_N = len(freqs_full) // 2
 
-    peak_freqs = find_freqs(data, sample_rate=rate, M=M).values
+    peak_freqs, _ = find_freqs(data, samplerate=rate, M=M)
 
     fig, ax = plt.subplots()
-    ax.plot(freqs[:half_N], fft_data[:half_N], color='tomato')
+    ax.plot(freqs_full[:half_N], fft_data[:half_N], color='tomato')
 
     for f in peak_freqs:
-        idx = np.argmin(np.abs(freqs[:half_N] - f))
+        idx = np.argmin(np.abs(freqs_full[:half_N] - f))
         amp = fft_data[idx]
         ax.scatter(f, amp, color='yellow', s=50, zorder=5)
         ax.text(f, amp, f"{f:.1f} Hz", fontsize=8, ha='center', va='bottom', color='black')
