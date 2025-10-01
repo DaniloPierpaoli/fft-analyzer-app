@@ -102,7 +102,7 @@ if uploaded_file:
 
     # Normalize if float
     if data.dtype == np.float32 or data.dtype == np.float64:
-        data = (data * 32767).astype(np.float)
+        data = (data * 32767).astype(float)
 
     # ===== Notes Table =====
     st.subheader(f"Detected Notes (Top {M})")
